@@ -1,10 +1,18 @@
-import tensorflow as tf
-import numpy as np
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input, decode_predictions
-from tensorflow.keras.preprocessing import image
+from transformers import pipeline
+from PIL import Image
 import requests
 from io import BytesIO
-from PIL import Image
+
+# Initialize the image classification pipeline (cached after first load)
+classifier = None
+
+def get_classifier():
+    global classifier
+    if classifier is None:
+        print("Loading AI model...")
+        # Using a lightweight model that works well on Streamlit Cloud
+        classifier = pipeline("image-classification", model="google/vit-base-patch16-224")
+    return classifier
 
 def classify_image(img_input):
     # Handle different input types
@@ -21,22 +29,14 @@ def classify_image(img_input):
         # Assume it's a PIL Image or file-like object from Streamlit
         img = img_input if isinstance(img_input, Image.Image) else Image.open(img_input)
 
-    # Resize for the model
-    img_resized = img.resize((224, 224))
-    
-    # Convert to array and preprocess
-    x = image.img_to_array(img_resized)
-    x = np.expand_dims(x, axis=0)
-    x = preprocess_input(x)
-
-    print("Loading model...")
-    model = MobileNetV2(weights='imagenet')
-
     print("Classifying...")
-    preds = model.predict(x)
+    clf = get_classifier()
+    predictions = clf(img)
     
-    # Decode results
-    results = decode_predictions(preds, top=3)[0]
+    # Convert to format similar to TensorFlow output: (id, label, score)
+    # For compatibility with the Streamlit app
+    results = [(f"class_{i}", pred['label'], pred['score']) for i, pred in enumerate(predictions[:3])]
+    
     return results, img
 
 if __name__ == "__main__":
